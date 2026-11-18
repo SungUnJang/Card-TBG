@@ -149,6 +149,14 @@
   FX.flash = function (color, a, life) {
     FX.add({ life: life || 0.25, add: true, layer: 'screen', draw(ctx, e, k) { ctx.globalAlpha = (a || 0.5) * (1 - k); ctx.fillStyle = color; ctx.fillRect(-50, -50, 1380, 820); } });
   };
+  // 화면 가장자리 붉은 테두리 (피격)
+  FX.vignette = function (color, a, life) {
+    FX.add({ life: life || 0.4, add: false, layer: 'screen', draw(ctx, e, k) {
+      const g = ctx.createRadialGradient(640, 360, 250, 640, 360, 800);
+      g.addColorStop(0, col(color, 0)); g.addColorStop(1, col(color, (a || 0.5) * (1 - k)));
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 1280, 720);
+    }});
+  };
   // 빛 기둥
   FX.pillar = function (x, y, o) {
     FX.add({ life: o.life || 0.6, add: true, layer: 'top', draw(ctx, e, k) {
@@ -167,6 +175,26 @@
         ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + (x2 - x1) * g, y1 + (y2 - y1) * g); ctx.stroke();
       });
     }});
+  };
+
+  // 물레방아: 세로로 도는 물의 바퀴
+  FX.wheel = function (x, y, o) {
+    const R = o.r || 110, life = o.life || 0.8;
+    FX.add({ life, add: true, layer: 'top', draw(ctx, e, k) {
+      const a = k < 0.15 ? k / 0.15 : k > 0.75 ? (1 - k) / 0.25 : 1, rot = k * Math.PI * 3.2 * (o.dir || 1);
+      ctx.translate(x, y); ctx.scale(o.sx || 0.62, 1); ctx.globalAlpha = a; ctx.lineCap = 'round';
+      for (let j = 0; j < 3; j++) {
+        const r = R * (1 - j * 0.16), st = rot + j * 0.9;
+        [[22 - j * 5, 'rgba(40,140,255,0.35)'], [10 - j * 2, 'rgba(90,190,255,0.9)'], [3, '#ffffff']].forEach(([w, c]) => {
+          ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(0, 0, r, st, st + 4.2); ctx.stroke();
+        });
+      }
+    }});
+    for (let i = 0; i < 8; i++) FX.later(i * 70, () => {
+      const ang = (i / 8) * Math.PI * 2 * 1.6 * (o.dir || 1);
+      const px = x + Math.cos(ang) * R * (o.sx || 0.62), py = y + Math.sin(ang) * R;
+      FX.burst(px, py, { n: 6, speed: [80, 220], life: [0.35, 0.7], size: [3, 6], color: ['#ffffff', '#a8e4ff', '#4ab0ff'], extra: { ay: 700, size2: 1 } });
+    });
   };
 
   // ---------- 캐릭터별 스킬 이펙트 ----------
@@ -191,6 +219,12 @@
       }
       case 'water': {
         FX.ribbon(src.x, src.y, src.x + dir * 150, src.y, { color: '#3ab0ff', amp: 36, waves: 1.5, w: 22, life: 0.55 });
+        { // 공격 범위 중앙에 큰 물의 바퀴
+          const mx = cells.reduce((a, c) => a + c.cx, 0) / cells.length, my = cells.reduce((a, c) => a + c.cy, 0) / cells.length;
+          const ms = cells.reduce((a, c) => a + c.s, 0) / cells.length;
+          FX.wheel(mx, my - 10 * ms, { r: 120 * ms, dir, life: 0.85 });
+          FX.flash('#6ac8ff', 0.18, 0.25);
+        }
         each(c => {
           FX.slash(c.cx, c.cy, { color: '#40b8ff', r: 62 * c.s, rot: rnd(0, TAU), w: 16 * c.s, sweep: 4.2, life: 0.5 });
           FX.slash(c.cx, c.cy, { color: '#a0e8ff', r: 42 * c.s, rot: rnd(0, TAU), w: 9 * c.s, sweep: 3.5, life: 0.45 });

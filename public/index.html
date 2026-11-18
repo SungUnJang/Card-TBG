@@ -21,6 +21,7 @@
     <div class="panel lobby-panel hidden" id="roomBox">
       <div class="p-title"><span id="meNick"></span> 님</div>
       <button class="btn red big" id="btnCreate">방 만들기</button>
+      <button class="btn blue" id="btnSolo">혼자 테스트 (CPU 대전)</button>
       <div class="row">
         <input id="codeInput" maxlength="4" placeholder="방 번호" inputmode="numeric" autocomplete="off">
         <button class="btn blue" id="btnJoin">참가</button>
@@ -63,6 +64,7 @@
   <section id="scr-skill" class="screen bg-red hidden">
     <div class="frame"></div>
     <div class="hud" id="hudSkill"></div>
+    <div class="test-panel hidden" id="testPanel"></div>
     <div class="cards" id="cardGrid"></div>
     <div class="bottom-panel">
       <div class="slots" id="slots"></div>
@@ -85,7 +87,16 @@
       <div class="ci-card" id="ci1"></div>
       <div class="ci-slot" id="ciSlot"></div>
     </div>
+    <div class="sp-cutin" id="spCutin">
+      <div class="sp-bg" id="spBg"></div>
+      <div class="sp-lines"></div>
+      <div class="sp-frame"><img id="spImg" alt=""><div class="sp-flash" id="spFlash"></div></div>
+      <div class="sp-name" id="spName"></div>
+      <div class="sp-dots" id="spDots"></div>
+    </div>
     <div class="skill-banner" id="skillBanner"><span></span></div>
+    <div class="hud-dmg l" id="hudDmg0"></div>
+    <div class="hud-dmg r" id="hudDmg1"></div>
     <div class="center-banner" id="centerBanner"></div>
   </section>
 
@@ -107,6 +118,7 @@
 </div>
 </div>
 <script src="js/data.js"></script>
+<script src="js/sound.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/battle.js"></script>
 <script src="js/game.js"></script>

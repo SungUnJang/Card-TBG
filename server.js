@@ -94,6 +94,7 @@ function roomView(r) {
     code: r.code, phase: r.phase, round: r.round, host: r.players[0] && r.players[0].id,
     players: r.players.map((p, i) => ({ id: p.id, nick: p.nick, side: i, char: p.char, charConfirmed: p.charConfirmed, ready: p.ready, wantsRematch: p.wantsRematch })),
     deadline: r.deadline || 0, now: Date.now(), state: r.state || null, winner: r.winner != null ? r.winner : null,
+    test: r.test ? { botMode: r.botMode, infEn: r.infEn, noTimer: r.noTimer } : null,
   };
 }
 function sync(r) { r.players.forEach(p => send(clients.get(p.id), { t: 'room', room: roomView(r), you: p.id })); }
@@ -105,7 +106,7 @@ function leaveRoom(c) {
   if (!r) return;
   r.players = r.players.filter(p => p.id !== c.id);
   clearTimeout(r.timer); clearTimeout(r.animTimer);
-  if (r.players.length === 0) rooms.delete(r.code);
+  if (r.players.every(p => p.bot)) rooms.delete(r.code); // 사람이 없으면 방 삭제 (테스트 방 포함)
   else {
     // 남은 사람은 대기실로 (방장이 됨)
     r.phase = 'waiting'; r.state = null; r.winner = null; r.round = 0;
@@ -125,7 +126,7 @@ function newPlayer(c) { return { id: c.id, nick: c.nick, char: null, charConfirm
 
 function startCharSelect(r) {
   r.phase = 'charselect'; r.round = 0; r.winner = null; r.state = null;
-  r.players.forEach(p => { p.char = null; p.charConfirmed = false; p.ready = false; p.picks = []; p.wantsRematch = false; });
+  r.players.forEach(p => { p.char = null; p.charConfirmed = false; p.ready = false; p.picks = []; p.wantsRematch = !!p.bot; });
   sync(r);
 }
 
@@ -138,10 +139,35 @@ function startSkillSelect(r) {
   r.round++;
   r.phase = 'skillselect';
   r.players.forEach(p => { p.ready = false; p.picks = []; });
-  r.deadline = Date.now() + GAME.SELECT_TIME * 1000;
+  if (r.test && r.infEn) r.state.p.forEach(q => { q.en = GAME.EN_MAX; }); // 테스트: 기력 무한
   clearTimeout(r.timer);
-  r.timer = setTimeout(() => runBattle(r), GAME.SELECT_TIME * 1000 + 600); // 약간의 여유
+  if (r.test && r.noTimer) r.deadline = 0;
+  else {
+    r.deadline = Date.now() + GAME.SELECT_TIME * 1000;
+    r.timer = setTimeout(() => runBattle(r), GAME.SELECT_TIME * 1000 + 600); // 약간의 여유
+  }
+  r.players.forEach(p => { if (p.bot) botPick(r, p); });
   sync(r);
+}
+
+// ---------------- 테스트용 CPU ----------------
+function botPick(r, p) {
+  const side = r.players.indexOf(p), ch = MH.CHAR_MAP[p.char];
+  let en = r.state.p[side].en; const picks = [];
+  for (let i = 0; i < GAME.SLOTS; i++) {
+    let card;
+    if (r.botMode === 'idle') card = ch.deck.find(c => c.id === 'rest');          // 가만히 (샌드백)
+    else if (r.botMode === 'guard') card = ch.deck.find(c => c.id === 'guard');   // 방어만
+    else {                                                                         // 랜덤
+      const ok = ch.deck.filter(c => c.en <= en);
+      const atk = ok.filter(c => c.type === 'attack');
+      card = (atk.length && Math.random() < 0.5) ? atk[Math.floor(Math.random() * atk.length)] : ok[Math.floor(Math.random() * ok.length)];
+    }
+    if (en >= card.en) en -= card.en;
+    if (card.type === 'rest') en = Math.min(GAME.EN_MAX, en + card.gain);
+    picks.push(card.id);
+  }
+  p.picks = picks; p.ready = true;
 }
 
 function validPicks(charId, picks) {
@@ -219,7 +245,7 @@ function runBattle(r) {
   clearTimeout(r.timer);
   r.players.forEach(p => { p.picks = validPicks(p.char, p.picks); });
   const { events, winner } = simulate(r);
-  r.phase = 'battle'; r.winner = winner; r.animDone = new Set();
+  r.phase = 'battle'; r.winner = winner; r.animDone = new Set(r.players.filter(p => p.bot).map(p => p.id));
   r.players.forEach(p => send(clients.get(p.id), { t: 'battle', events, room: roomView(r), you: p.id }));
   // 두 화면의 재생이 끝나면 다음 라운드 (최대 60초 대기)
   clearTimeout(r.animTimer);
@@ -258,6 +284,40 @@ function handle(c, m) {
       break;
     }
     case 'leave': leaveRoom(c); send(c, { t: 'left', rooms: roomList() }); break;
+    case 'solo': { // 혼자 테스트: CPU 와 대전
+      if (c.room) leaveRoom(c);
+      const code = 'T' + makeCode();
+      const bot = { id: 'bot-' + c.id, nick: 'CPU', bot: true, char: null, charConfirmed: false, ready: false, picks: [], wantsRematch: true };
+      const room = { code, test: true, botMode: 'random', infEn: false, noTimer: true, phase: 'waiting', round: 0, players: [newPlayer(c), bot] };
+      rooms.set(code, room); c.room = code;
+      startCharSelect(room); bot.wantsRematch = true;
+      break;
+    }
+    case 'pickBot': { // 테스트 방: CPU 캐릭터 고르기
+      if (!r || !r.test || r.phase !== 'charselect') return;
+      const me = playerOf(r, c), bot = r.players.find(p => p.bot);
+      if (!me.charConfirmed || !MH.CHAR_MAP[m.char] || m.char === me.char) return;
+      bot.char = m.char; bot.charConfirmed = true;
+      startBattleSetup(r);
+      break;
+    }
+    case 'testOpt': { // 테스트 방 옵션
+      if (!r || !r.test) return;
+      if (m.key === 'botMode') r.botMode = ({ random: 'idle', idle: 'guard', guard: 'random' })[r.botMode];
+      if (m.key === 'infEn') { r.infEn = !r.infEn; if (r.infEn && r.state) r.state.p.forEach(q => { q.en = GAME.EN_MAX; }); }
+      if (m.key === 'noTimer') {
+        r.noTimer = !r.noTimer;
+        if (r.phase === 'skillselect') {
+          clearTimeout(r.timer);
+          if (r.noTimer) r.deadline = 0;
+          else { r.deadline = Date.now() + GAME.SELECT_TIME * 1000; r.timer = setTimeout(() => runBattle(r), GAME.SELECT_TIME * 1000 + 600); }
+        }
+      }
+      if (m.key === 'heal' && r.state) r.state.p.forEach(q => { q.hp = GAME.HP; });
+      if (r.phase === 'skillselect') r.players.forEach(p => { if (p.bot) botPick(r, p); });
+      sync(r);
+      break;
+    }
     case 'start':
       if (r && r.phase === 'waiting' && r.players.length === 2 && r.players[0].id === c.id) { startCharSelect(r); broadcastLobby(); }
       break;

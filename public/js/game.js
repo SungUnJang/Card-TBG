@@ -6,10 +6,24 @@
   let picks = [], picksRound = -1, readySent = false, inBattle = false, timerIv = null, hoverCard = null;
 
   // ---------------- 화면 크기 맞추기 ----------------
-  function fit() { const s = Math.min(innerWidth / 1280, innerHeight / 720); $('#stage').style.transform = `scale(${s})`; }
-  addEventListener('resize', fit); fit();
+  // 휴대폰을 세로로 들고 있으면 화면을 90도 돌려서 항상 가로 모드로 보여줌
+  function fit() {
+    const st = $('#stage'), W = innerWidth, H = innerHeight;
+    if (H > W) { const s = Math.min(H / 1280, W / 720); st.style.transform = `rotate(90deg) scale(${s})`; }
+    else { const s = Math.min(W / 1280, H / 720); st.style.transform = `scale(${s})`; }
+  }
+  addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 200)); fit();
+  // 모바일: 첫 터치 때 전체화면 + 가로 고정 시도 (안드로이드 크롬 등 지원 기기)
+  const isTouch = matchMedia('(pointer: coarse)').matches;
+  if (isTouch) addEventListener('pointerdown', function once(e) {
+    if (e.target && e.target.tagName === 'INPUT') return; // 닉네임 입력할 때는 키보드 때문에 패스
+    removeEventListener('pointerdown', once, true);
+    const el = document.documentElement, rf = el.requestFullscreen || el.webkitRequestFullscreen;
+    try { const p = rf && rf.call(el); const lock = () => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}); if (p && p.then) p.then(lock).catch(() => {}); else lock(); } catch (err) {}
+  }, true);
 
   function show(id) {
+    Sound.bgm(id === '#scr-skill' || id === '#scr-battle' ? 'bgmBattle' : 'bgmLobby');
     ['#scr-lobby', '#scr-room', '#scr-char', '#scr-skill', '#scr-battle'].forEach(s => $(s).classList.toggle('hidden', s !== id));
     if (id !== '#scr-battle') { $('#scr-result').classList.add('hidden'); Battle.stop(); }
   }
@@ -57,6 +71,7 @@
   $('#nickOk').onclick = enterLobby;
   $('#nickInput').onkeydown = e => { if (e.key === 'Enter') enterLobby(); };
   $('#btnCreate').onclick = () => send({ t: 'create' });
+  $('#btnSolo').onclick = () => send({ t: 'solo' });
   $('#btnJoin').onclick = () => { const c = $('#codeInput').value.trim(); if (c) send({ t: 'join', code: c }); };
   $('#codeInput').onkeydown = e => { if (e.key === 'Enter') $('#btnJoin').click(); };
   $('#btnRefresh').onclick = () => send({ t: 'rooms' });
@@ -111,7 +126,10 @@
       html += `<div class="cs-tile${cls}" data-id="${ch.id}"><img src="assets/chars/${ch.id}/portrait.png" alt=""><div class="nm">${esc(ch.name)}</div>${tag}</div>`;
     }
     grid.innerHTML = html;
-    grid.querySelectorAll('.cs-tile[data-id]').forEach(t => t.onclick = () => { if (!mine.charConfirmed) send({ t: 'pickChar', char: t.dataset.id }); });
+    grid.querySelectorAll('.cs-tile[data-id]').forEach(t => t.onclick = () => {
+      if (!mine.charConfirmed) send({ t: 'pickChar', char: t.dataset.id });
+      else if (room.test && t.dataset.id !== mine.char) send({ t: 'pickBot', char: t.dataset.id }); // 테스트: CPU 캐릭터
+    });
     [0, 1].forEach(i => {
       const p = room.players[i], el = $('#csSide' + i);
       if (!p) { el.innerHTML = ''; return; }
@@ -121,7 +139,8 @@
         `<div class="st${p.charConfirmed ? ' ok' : ''}">${p.charConfirmed ? '결정 완료' : '고르는 중'}</div>`;
     });
     $('#btnCharOk').disabled = !mine.char || mine.charConfirmed;
-    $('#csHint').textContent = mine.charConfirmed ? '상대가 결정하길 기다리는 중…' : '캐릭터를 고르고 결정을 눌러주세요 (같은 캐릭터는 고를 수 없어요)';
+    $('#csHint').textContent = room.test ? (mine.charConfirmed ? '[테스트] 이제 CPU가 쓸 캐릭터를 눌러주세요' : '[테스트] 내 캐릭터를 고르고 결정을 눌러주세요')
+      : mine.charConfirmed ? '상대가 결정하길 기다리는 중…' : '캐릭터를 고르고 결정을 눌러주세요 (같은 캐릭터는 고를 수 없어요)';
   }
 
   // ---------------- HUD ----------------
@@ -182,10 +201,11 @@
     return { list: out, now: en };
   }
   function sendPicks(ready) { send({ t: 'picks', picks, ready: !!ready }); }
+  document.addEventListener('click', e => { if (e.target.closest('button, .card, .cs-tile, .slot.filled, .room-item')) Sound.play('click'); });
 
   $('#btnReady').onclick = () => {
     if (readySent) return;
-    readySent = true; sendPicks(true); renderSkill();
+    readySent = true; sendPicks(true); Sound.play('ready'); renderSkill();
   };
   $('#btnReset').onclick = () => { if (readySent) return; picks = []; sendPicks(false); renderSkill(); };
 
@@ -226,7 +246,22 @@
     $('#btnReset').disabled = readySent;
     $('#enPreview').textContent = `예상 기력: ${st.en}${chain.list.map(v => ' → ' + v).join('')}`;
     renderMini();
+    renderTestPanel();
     startTimer();
+  }
+
+  // 혼자 테스트 패널
+  function renderTestPanel() {
+    const el = $('#testPanel');
+    if (!room.test) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    const T = room.test, mode = { random: '랜덤', idle: '가만히', guard: '방어만' }[T.botMode];
+    el.innerHTML = `<div class="tt">TEST MODE</div>
+      <button data-k="botMode">CPU 행동<b>${mode}</b></button>
+      <button data-k="infEn">기력 무한<b>${T.infEn ? 'ON' : 'OFF'}</b></button>
+      <button data-k="noTimer">시간 제한<b>${T.noTimer ? 'OFF' : '30초'}</b></button>
+      <button data-k="heal">HP 둘 다<b>100 회복</b></button>`;
+    el.querySelectorAll('button').forEach(b => b.onclick = () => send({ t: 'testOpt', key: b.dataset.k }));
   }
 
   function renderMini() {
@@ -264,6 +299,7 @@
     const tick = () => {
       const el = document.querySelector('#hudSkill .r3'); if (!el || !room) return;
       const left = Math.max(0, Math.ceil((room.deadline - (Date.now() + timeOffset)) / 1000));
+      if (!room.deadline) { el.textContent = '∞ 테스트'; el.classList.remove('warn'); return; }
       el.textContent = `⏱ ${left}초`; el.classList.toggle('warn', left <= 5);
     };
     tick(); timerIv = setInterval(tick, 250);
@@ -279,6 +315,8 @@
     const init = m.events[0].s;
     setBars(hud, init);
     Battle.start(room, myId, init);
+    // 필살기 이미지 미리 불러오기
+    room.players.forEach(p => MH.CHAR_MAP[p.char].deck.forEach(c => (c.cutin || []).forEach(f => { const i = new Image(); i.src = f; })));
     const ci = [$('#ci0'), $('#ci1')];
     let curCards = null;
     const hooks = {
@@ -299,6 +337,30 @@
         box.classList.add('show');
       },
       act: pid => ci.forEach((el, i) => el.classList.toggle('act', i === pid)),
+      // 필살기 컷인: 이미지를 cutT(ms)마다 한 컷씩
+      special: async (ch, card, cutT) => {
+        const box = $('#spCutin'), im = $('#spImg'), bg = $('#spBg'), fl = $('#spFlash'), dots = $('#spDots');
+        const wait = ms => new Promise(r => setTimeout(r, ms));
+        box.style.setProperty('--cc', card.aura || ch.color);
+        $('#spName').textContent = card.name;
+        dots.innerHTML = card.cutin.map(() => '<i></i>').join('');
+        box.className = 'sp-cutin show';
+        for (let i = 0; i < card.cutin.length; i++) {
+          im.src = card.cutin[i]; bg.style.backgroundImage = `url(${card.cutin[i]})`;
+          im.style.setProperty('--d', (cutT / 1000) + 's'); im.style.setProperty('--px', (i % 2 ? -40 : 40) + 'px');
+          im.classList.remove('go'); fl.classList.remove('go'); void im.offsetWidth; im.classList.add('go'); fl.classList.add('go');
+          [...dots.children].forEach((d, j) => d.classList.toggle('on', j <= i));
+          await wait(cutT);
+        }
+        box.classList.add('out'); await wait(180); box.className = 'sp-cutin';
+      },
+      // 피격: HUD HP바 흔들림 + 초상화 빨갛게 + 데미지 숫자
+      hurt: (pid, dmg) => {
+        const L = pid === 0 ? 'l' : 'r';
+        const bar = hud.querySelector(`[data-k=hp${pid}]`), por = hud.querySelector(`.por.${L}`), dm = $('#hudDmg' + pid);
+        [bar, por].forEach(el => { if (!el) return; el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); });
+        if (dmg > 0) { dm.textContent = '-' + dmg; dm.classList.remove('go'); void dm.offsetWidth; dm.classList.add('go'); }
+      },
       skill: (ch, card) => { const b = $('#skillBanner'); b.style.setProperty('--cc', ch.color); b.querySelector('span').textContent = card.name; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go'); },
     };
     Battle.play(m.events, hooks).then(() => {
@@ -316,6 +378,7 @@
     const w = room.players[room.winner]; if (!w) return;
     if ($('#scr-battle').classList.contains('hidden')) show('#scr-battle');
     const r = $('#scr-result'); const wasHidden = r.classList.contains('hidden');
+    if (wasHidden) Sound.play('victory');
     r.classList.remove('hidden');
     $('#vicNick').textContent = w.nick;
     $('#vicChar').textContent = MH.CHAR_MAP[w.char].name + (w.id === myId ? ' · 승리했어요!' : '');

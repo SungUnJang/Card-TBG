@@ -57,7 +57,15 @@
   const CHARACTERS = [
     { id: 'tanjiro', name: '카마도 탄지로', color: '#2fb07a', guardDn: 15, skills: [
       { name: '수면 베기',       dn: 0,  en: 0,  fx: 'water', card: 5, range: [".#.", "#@#", "###"] },
-      { name: '물레방아',        dn: 35, en: 35, fx: 'water', card: 6, range: [".#.", "#@#", ".#."] },
+      { name: '물레방아',        dn: 35, en: 35, fx: 'water', card: 6, range: [".#.", "#@#", ".#."],
+        // ▼ 필살기 연출 (실험: 탄지로 물레방아). 다른 스킬에도 같은 칸을 넣으면 똑같이 연출돼요.
+        cutin: ['assets/cutin/tanjiro_s2_1.jpg', 'assets/cutin/tanjiro_s2_2.jpg',
+                'assets/cutin/tanjiro_s2_3.jpg', 'assets/cutin/tanjiro_s2_4.jpg'], // 0.5초에 한 컷씩
+        cutinTime: 0.5,      // 컷 하나가 보이는 시간(초)
+        aura: '#3ab0ff',     // 오라 색
+        sound: '',           // 스킬 사용 소리 (예: 'assets/sound/tanjiro_mulebangah.mp3')
+        hitSound: '',        // 이 스킬에 맞았을 때 소리
+      },
       { name: '히노카미 카구라', dn: 50, en: 50, fx: 'sun',   card: 7, range: ["###", "#C#", "###"] },
       { name: '원무',            dn: 40, en: 40, fx: 'water', card: 8, range: [".#.", "#C#", ".#."] },
     ]},
@@ -135,6 +143,27 @@
     ]},
   ];
 
+  // ---------------- 소리 (mp3 / mp4 / m4a 모두 가능) ----------------
+  // 파일을 public/assets/sound/ 에 넣고 경로를 적으세요. 비워두면('') 소리가 안 나요.
+  // 예) hit: 'assets/sound/hit.mp3'
+  const SOUND = {
+    volume: 0.8,      // 효과음 전체 크기 (0 ~ 1)
+    bgmVolume: 0.45,  // 배경음악 크기 (0 ~ 1)
+    bgmLobby: '',     // 로비/대기실/캐릭터 선택 배경음악 (반복 재생)
+    bgmBattle: '',    // 스킬 선택/전투 배경음악 (반복 재생)
+    click: '',        // 버튼/카드 누를 때
+    ready: '',        // 준비완료
+    roundStart: '',   // 라운드 시작
+    move: '',         // 이동
+    guard: '',        // 방어
+    rest: '',         // 기력 회복
+    attack: '',       // 공격 기본음 (스킬에 sound 가 없을 때)
+    hit: '',          // 맞았을 때 (스킬에 hitSound 가 없을 때)
+    miss: '',         // 빗나갔을 때
+    ko: '',           // K.O.
+    victory: '',      // 승리 화면
+  };
+
   // 캐릭터 선택 화면 4x4 = 16칸. 13명 + 미구현 3칸
   const SELECT_SLOTS = 16;
 
@@ -182,7 +211,7 @@
     return res;
   }
 
-  const API = { GAME, COMMON, CHARACTERS, CHAR_MAP, SELECT_SLOTS, getCard, attackCells, parseRange };
+  const API = { GAME, SOUND, COMMON, CHARACTERS, CHAR_MAP, SELECT_SLOTS, getCard, attackCells, parseRange };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.MH = API;
 })(typeof window !== 'undefined' ? window : globalThis);
