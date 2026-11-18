@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>멘헤라 대전</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="wrap">
+<div id="stage">
+
+  <!-- ============ 로비 ============ -->
+  <section id="scr-lobby" class="screen bg-title">
+    <div class="panel lobby-panel" id="nickBox">
+      <div class="p-title">닉네임</div>
+      <input id="nickInput" maxlength="10" placeholder="닉네임 입력 (10자)" autocomplete="off">
+      <button class="btn red big" id="nickOk">입장하기</button>
+      <div class="hint" id="connState">서버 연결 중…</div>
+    </div>
+    <div class="panel lobby-panel hidden" id="roomBox">
+      <div class="p-title"><span id="meNick"></span> 님</div>
+      <button class="btn red big" id="btnCreate">방 만들기</button>
+      <div class="row">
+        <input id="codeInput" maxlength="4" placeholder="방 번호" inputmode="numeric" autocomplete="off">
+        <button class="btn blue" id="btnJoin">참가</button>
+      </div>
+      <div class="p-sub">열린 방 <button class="mini" id="btnRefresh">새로고침</button></div>
+      <div id="roomList" class="room-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ 대기실 ============ -->
+  <section id="scr-room" class="screen bg-title hidden">
+    <div class="panel wait-panel">
+      <div class="p-sub">방 번호</div>
+      <div class="room-code" id="roomCode">0000</div>
+      <div class="wait-players">
+        <div class="wp" id="wp0"></div>
+        <div class="vs-mini">VS</div>
+        <div class="wp" id="wp1"></div>
+      </div>
+      <div class="hint" id="waitHint">상대를 기다리는 중…</div>
+      <div class="row center">
+        <button class="btn red big" id="btnStart" disabled>게임 시작</button>
+        <button class="btn blue" id="btnLeave">나가기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 캐릭터 선택 ============ -->
+  <section id="scr-char" class="screen bg-red hidden">
+    <div class="frame"></div>
+    <div class="cs-title">캐릭터 선택</div>
+    <div class="cs-side left" id="csSide0"></div>
+    <div class="cs-grid" id="csGrid"></div>
+    <div class="cs-side right" id="csSide1"></div>
+    <button class="btn red big cs-ok" id="btnCharOk" disabled>결정</button>
+    <div class="cs-hint" id="csHint">캐릭터를 골라주세요</div>
+  </section>
+
+  <!-- ============ 스킬 선택 ============ -->
+  <section id="scr-skill" class="screen bg-red hidden">
+    <div class="frame"></div>
+    <div class="hud" id="hudSkill"></div>
+    <div class="cards" id="cardGrid"></div>
+    <div class="bottom-panel">
+      <div class="slots" id="slots"></div>
+      <div class="btn-col">
+        <button class="btn brown" id="btnReady">준비완료</button>
+        <button class="btn brown" id="btnReset">초기화</button>
+        <div class="en-preview" id="enPreview"></div>
+      </div>
+      <div class="mini-board" id="miniBoard"></div>
+    </div>
+  </section>
+
+  <!-- ============ 전투 ============ -->
+  <section id="scr-battle" class="screen hidden">
+    <canvas id="cv" width="1280" height="720"></canvas>
+    <div class="hud battle-hud" id="hudBattle"></div>
+    <div class="cutin" id="cutin">
+      <div class="ci-card" id="ci0"></div>
+      <div class="ci-vs">VS</div>
+      <div class="ci-card" id="ci1"></div>
+      <div class="ci-slot" id="ciSlot"></div>
+    </div>
+    <div class="skill-banner" id="skillBanner"><span></span></div>
+    <div class="center-banner" id="centerBanner"></div>
+  </section>
+
+  <!-- ============ 결과 ============ -->
+  <section id="scr-result" class="hidden">
+    <div class="victory-rays"></div>
+    <img id="vicSprite" alt="">
+    <div class="victory">VICTORY</div>
+    <div class="vic-nick" id="vicNick"></div>
+    <div class="vic-char" id="vicChar"></div>
+    <div class="row center vic-btns">
+      <button class="btn red big" id="btnRematch">다시 하기</button>
+      <button class="btn blue" id="btnExit">나가기</button>
+    </div>
+    <div class="hint" id="rematchHint"></div>
+  </section>
+
+  <div id="toast"></div>
+</div>
+</div>
+<script src="js/data.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
